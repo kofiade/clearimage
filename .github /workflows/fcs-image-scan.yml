@@ -1,0 +1,64 @@
+# .github/workflows/image-assessment.yml
+name: CrowdStrike Image Assessment
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# =========================================================================
+# REPOSITORY-SPECIFIC SECTION — Change these values for each repository
+# =========================================================================
+env:
+  IMAGE_NAME: myapp          # <-- Change: your container image name
+  IMAGE_TAG: ${{ github.sha }}
+  FALCON_REGION: us-2        # <-- Change: your CrowdStrike region (us-1, us-2, eu-1, us-gov-1, us-gov-2)
+  DOCKERFILE_PATH: .         # <-- Change: path to your Dockerfile context
+# =========================================================================
+
+jobs:
+  build-and-assess:
+    name: Build & Scan Image
+    runs-on: ubuntu-latest
+
+    # Required for uploading SARIF to GitHub Security tab
+    permissions:
+      security-events: write
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: |
+          docker build -t ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }} ${{ env.DOCKERFILE_PATH }}
+
+      - name: CrowdStrike Image Scan
+        id: fcs
+        uses: crowdstrike/fcs-action@v3.0.0
+        with:
+          falcon_client_id: ${{ vars.FALCON_CLIENT_ID }}
+          falcon_region: ${{ env.FALCON_REGION }}
+          scan_type: image
+          image: ${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}
+          minimum_severity: high
+          upload_results: true              # Upload results to Falcon Console
+          report_formats: sarif             # SARIF format for GitHub Security
+          output_path: ./scan-results.sarif
+        env:
+          FALCON_CLIENT_SECRET: ${{ secrets.FALCON_CLIENT_SECRET }}
+          FCS_VERBOSE: 'true'
+
+      - name: Upload SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ./scan-results.sarif
+
+      - name: Fail on High or Critical vulnerabilities
+        if: steps.fcs.outputs.exit-code != 0
+        run: |
+          echo "Image scan found HIGH or CRITICAL severity vulnerabilities. Blocking push."
+          exit 1
