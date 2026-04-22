@@ -1,14 +1,21 @@
-# Use Chainguard minimal Python image (low/no known CVEs)
-FROM cgr.dev/chainguard/python:latest
+# Stage 1: build dependencies
+FROM python:3.12-alpine AS builder
 
-# Set working directory
 WORKDIR /app
 
-# Copy your application files
-COPY . /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Install dependencies (if you have requirements.txt)
-RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
 
-# Run your app
+# Stage 2: secure runtime
+FROM cgr.dev/chainguard/python:latest
+
+WORKDIR /app
+
+COPY --from=builder /install /usr/local
+COPY --from=builder /app /app
+
+USER nonroot
+
 CMD ["python", "app.py"]
