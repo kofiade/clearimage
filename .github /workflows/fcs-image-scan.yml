@@ -15,7 +15,7 @@ env:
   IMAGE_TAG: ${{ github.sha }}
   FALCON_REGION: us-2        # <-- Change: your CrowdStrike region (us-1, us-2, eu-1, us-gov-1, us-gov-2)
   DOCKERFILE_PATH: .         # <-- Change: path to your Dockerfile context
-# =========================================================================
+# ==========================================================================
 
 jobs:
   build-and-assess:
